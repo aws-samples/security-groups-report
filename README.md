@@ -1,5 +1,5 @@
 
-# Security Group Report Generator
+# Security Groups Report Generator
 
 Security Group Report Generator provides you a centralized, point in time report of your security groups policy.  
 The script outputs an excel table:
