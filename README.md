@@ -8,8 +8,10 @@ The script outputs an excel table:
 
 
 ### Prerequisites
+#### IAM policy
+The required permissions can be found here [iam.json](iam.json)
 
-Configure AWS CLI credentials:
+#### Configure AWS CLI credentials
 ```
 aws configure
 ```
