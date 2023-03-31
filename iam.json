@@ -6,7 +6,10 @@
             "Effect": "Allow",
             "Action": [
                 "ec2:DescribeInstances",
-                "ec2:DescribeSecurityGroups"
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeRegions",
+                "ec2:DescribeVpcEndpoints",
+                "elasticloadbalancing:DescribeLoadBalancers"
             ],
             "Resource": "*"
         }
