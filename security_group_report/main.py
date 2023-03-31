@@ -34,10 +34,10 @@ def get_rules(sg, region):
             sg,
         ]
     )
-    sgs = list(sgs.pages())
-    if not sgs or not sgs[0]:
+    sgs = next(sgs.pages(), [])
+    if not sgs:
         return (None, None)
-    sg = sgs[0][0]
+    sg = sgs[0]
     sg_inbound = sg.ip_permissions
     sg_outbound = sg.ip_permissions_egress
     return sg_inbound, sg_outbound
@@ -47,21 +47,26 @@ def get_sgs(resource, resource_type):
     if resource_type == "instance":
         sgs = resource.security_groups
     elif resource_type == "load_balancer":
-        sgs = [{"GroupId": sg} for sg in resource["SecurityGroups"]]
+        security_groups = resource.get("SecurityGroups")
+        if security_groups is not None:
+            sgs = [{"GroupId": sg} for sg in security_groups]
+        else:
+            sgs = []
     elif resource_type == "endpoint":
-        sgs = [{"GroupId": sg["GroupId"]} for sg in resource["Groups"]]
+        groups = resource.get("Groups", [])
+        sgs = [{"GroupId": sg["GroupId"]} for sg in groups]
     return sgs
 
 # Function to get a resource name
 def get_name(resource, resource_type):
-    if resource_type == "instance" and resource.tags:
+    if resource_type == "instance" and getattr(resource, "tags", None):
         for tag in resource.tags:
             if tag["Key"] == "Name":
                 return tag["Value"]
     elif resource_type == "load_balancer":
-        return resource["LoadBalancerName"]
+        return resource.get("LoadBalancerName", "None")
     elif resource_type == "endpoint":
-        return resource["VpcEndpointId"]
+        return resource.get("VpcEndpointId", "None")
     return "None"
 
 # Function to get security group name
@@ -93,8 +98,8 @@ def main():
         ec2r = boto3.resource("ec2", region)
         elbv2 = boto3.client("elbv2", region)
         instances = list(ec2r.instances.all())
-        load_balancers = elbv2.describe_load_balancers()["LoadBalancers"]
-        endpoints = ec2r.meta.client.describe_vpc_endpoints()["VpcEndpoints"]
+        load_balancers = elbv2.describe_load_balancers().get("LoadBalancers", [])
+        endpoints = ec2r.meta.client.describe_vpc_endpoints().get("VpcEndpoints", [])
 
         resources = [
             {"type": "instance", "data": instances},
@@ -108,10 +113,10 @@ def main():
                     resource_id = resource_data.id
                     resource_name = get_name(resource_data, "instance")
                 elif resource_type["type"] == "load_balancer":
-                    resource_id = resource_data["LoadBalancerArn"]
+                    resource_id = resource_data.get("LoadBalancerArn")
                     resource_name = get_name(resource_data, "load_balancer")
                 elif resource_type["type"] == "endpoint":
-                    resource_id = resource_data["VpcEndpointId"]
+                    resource_id = resource_data.get("VpcEndpointId")
                     resource_name = get_name(resource_data, "endpoint")
 
                 sgs = get_sgs(resource_data, resource_type["type"])
@@ -123,7 +128,7 @@ def main():
 
                     # Process inbound rules and append to DataFrame
                     for rule in rules_inbound:
-                        for ip_range in rule["IpRanges"]:
+                        for ip_range in rule.get("IpRanges", []):
                             row = {
                                 "Resource Type": resource_type["type"],
                                 "Region": region,
@@ -132,17 +137,17 @@ def main():
                                 "SG-Name": sg_name,
                                 "SG-ID": sg_id,
                                 "Direction": "Inbound",
-                                "Source": ip_range["CidrIp"],
+                                "Source": ip_range.get("CidrIp", ""),
                                 "Destination": "",
-                                "Protocol": rule["IpProtocol"],
-                                "Ports": rule["FromPort"] if "FromPort" in rule else "N/A",
+                                "Protocol": rule.get("IpProtocol", ""),
+                                "Ports": rule.get("FromPort", "N/A"),
                             }
                             row_df = pd.DataFrame([row], columns=columns)
                             df = pd.concat([df, row_df], ignore_index=True)
 
                     # Process outbound rules and append to DataFrame
                     for rule in rules_outbound:
-                        for ip_range in rule["IpRanges"]:
+                        for ip_range in rule.get("IpRanges", []):
                             row = {
                                 "Resource Type": resource_type["type"],
                                 "Region": region,
@@ -152,9 +157,9 @@ def main():
                                 "SG-ID": sg_id,
                                 "Direction": "Outbound",
                                 "Source": "",
-                                "Destination": ip_range["CidrIp"],
-                                "Protocol": rule["IpProtocol"],
-                                "Ports": rule["FromPort"] if "FromPort" in rule else "N/A",
+                                "Destination": ip_range.get("CidrIp", ""),
+                                "Protocol": rule.get("IpProtocol", ""),
+                                "Ports": rule.get("FromPort", "N/A"),
                             }
                             row_df = pd.DataFrame([row], columns=columns)
                             df = pd.concat([df, row_df], ignore_index=True)
